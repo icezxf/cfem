@@ -2,6 +2,23 @@ import { Alist } from "./alist";
 import type { Env, LibraryRow } from "./types";
 import { nowSec } from "./util";
 
+interface QueueItem {
+  path: string;
+  skip: number;
+}
+
+function parseQueue(value: string): QueueItem[] {
+  try {
+    const raw = JSON.parse(value) as unknown;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((item) =>
+      typeof item === "string" ? { path: item, skip: 0 } : item as QueueItem,
+    ).filter((item) => typeof item.path === "string");
+  } catch {
+    return [];
+  }
+}
+
 interface ScanJob {
   id: number;
   library_id: number;
@@ -110,7 +127,8 @@ async function scanDirectory(
   library: LibraryRow,
   alist: Alist,
   dir: string,
-  queue: string[],
+  skip: number,
+  queue: QueueItem[],
 ): Promise<number> {
   const { entries } = await alist.list(dir, 1, 1000);
   const images = entries.filter((e) => !e.is_dir && /\.(jpg|jpeg|png|webp)$/i.test(e.name));
@@ -121,15 +139,15 @@ async function scanDirectory(
   const posterPath = poster ? joinPath(dir, poster.name) : undefined;
   const fanartPath = fanart ? joinPath(dir, fanart.name) : undefined;
 
-  let scanned = 0;
   for (const entry of entries) {
-    const full = joinPath(dir, entry.name);
-    if (entry.is_dir) {
-      queue.push(full);
-      continue;
-    }
-    if (!/\.strm$/i.test(entry.name)) continue;
+    if (entry.is_dir) queue.push({ path: joinPath(dir, entry.name), skip: 0 });
+  }
 
+  const files = entries.filter((entry) => !entry.is_dir && /\.strm$/i.test(entry.name));
+  const batch = files.slice(skip, skip + 5);
+  let scanned = 0;
+  for (const entry of batch) {
+    const full = joinPath(dir, entry.name);
     let url: string | undefined;
     try {
       const content = await alist.readText(full);
@@ -192,6 +210,9 @@ async function scanDirectory(
     }
     scanned += 1;
   }
+  if (skip + batch.length < files.length) {
+    queue.unshift({ path: dir, skip: skip + batch.length });
+  }
   return scanned;
 }
 
@@ -202,7 +223,7 @@ export async function createScan(env: Env, libraryId: number): Promise<number> {
   const job = await env.DB.prepare(
     `INSERT INTO scan_jobs (library_id, queue, status, scanned, total, updated_at)
      VALUES (?1, ?2, 'running', 0, 0, ?3)`,
-  ).bind(libraryId, JSON.stringify([library.path]), nowSec()).run();
+  ).bind(libraryId, JSON.stringify([{ path: library.path, skip: 0 }]), nowSec()).run();
   return job.meta.last_row_id;
 }
 
@@ -217,15 +238,16 @@ export async function stepScan(env: Env, jobId: number): Promise<ScanJob | null>
   if (!library) return job;
 
   const alist = Alist.fromEnv(env);
-  const queue = JSON.parse(job.queue) as string[];
+  const queue = parseQueue(job.queue);
   let scanned = job.scanned;
   let processedDirs = 0;
   let error = job.error;
 
   try {
-    while (queue.length > 0 && processedDirs < 3) {
-      const dir = queue.shift()!;
-      scanned += await scanDirectory(env, library, alist, dir, queue);
+    // 每个目录最多读 5 个 strm；TV 一项会写 Series/Season/Episode，控制在 50 子请求内
+    while (queue.length > 0 && processedDirs < 1) {
+      const item = queue.shift()!;
+      scanned += await scanDirectory(env, library, alist, item.path, item.skip, queue);
       processedDirs += 1;
     }
     const status = queue.length === 0 ? "done" : "running";
