@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CFEM</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="login" class="login">
+    <h1>CFEM</h1>
+    <p class="hint">Cloudflare Worker + AList + D1 的 Emby 兼容服务</p>
+    <input id="username" placeholder="用户名" value="admin">
+    <input id="password" type="password" placeholder="密码">
+    <button id="login-btn">登录</button>
+    <p id="login-error" class="error"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <header>
+      <strong>CFEM</strong>
+      <span id="alist-state" class="badge"></span>
+      <button id="logout" class="ghost">退出</button>
+    </header>
+
+    <section class="panel">
+      <h2>媒体库</h2>
+      <div id="libraries" class="chips"></div>
+      <div class="form-row">
+        <input id="lib-name" placeholder="媒体库名称">
+        <select id="lib-type"><option value="movies">电影</option><option value="tvshows">剧集</option></select>
+        <input id="lib-path" placeholder="AList 路径，如 /阿里云盘/电影">
+        <button id="browse-btn" class="ghost">浏览</button>
+        <button id="add-lib">添加</button>
+        <button id="scan-btn" class="ghost">扫描</button>
+      </div>
+      <div id="scan-state" class="hint"></div>
+    </section>
+
+    <section class="panel">
+      <h2>媒体</h2>
+      <div id="items" class="grid"></div>
+      <button id="load-more" class="ghost hidden">加载更多</button>
+    </section>
+  </div>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <button id="modal-close" class="ghost close">×</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
