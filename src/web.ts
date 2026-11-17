@@ -148,8 +148,14 @@ export async function webDebug(request: Request, env: Env): Promise<Response> {
   const total = await env.DB.prepare("SELECT COUNT(*) AS c FROM items").first<{ c: number }>();
   const jobs = await env.DB.prepare("SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 5").all();
   const sample = await env.DB.prepare(
-    "SELECT id, title, type, strm_path, strm_url, poster, plot, year FROM items ORDER BY id LIMIT 5",
+    `SELECT id, title, type, strm_path, strm_url, poster, plot, year
+       FROM items
+      ORDER BY (poster IS NULL AND plot IS NULL) ASC, id DESC
+      LIMIT 5`,
   ).all();
+  const metaCount = await env.DB.prepare(
+    "SELECT COUNT(*) AS c FROM items WHERE poster IS NOT NULL OR plot IS NOT NULL",
+  ).first<{ c: number }>();
   let posterCheck: Record<string, unknown> = {};
   const withPoster = sample.results.find((item: any) => item.poster);
   if (withPoster) {
@@ -194,6 +200,7 @@ export async function webDebug(request: Request, env: Env): Promise<Response> {
     alistConfigured: Boolean(configuredUrl && configuredToken),
     alist,
     items: total?.c ?? 0,
+    metaItems: metaCount?.c ?? 0,
     libraries: libraries.results,
     jobs: jobs.results,
     sampleItems: sample.results,
