@@ -59,8 +59,10 @@ Cloudflare Worker（src/index.ts）
 ## 扫描与播放说明
 
 - 扫描会读取同目录的 `.nfo`（标题、简介、年份、类型、标签、时长）以及 `poster.jpg` / `fanart.jpg`。
+- 同一目录有多部片子时，支持 `<片名>-poster.jpg` / `<片名>-fanart.jpg` 和 `<片名>.nfo` 按文件匹配。
 - 剧集会读取 `tvshow.nfo`、`season.nfo` 和单集 NFO。
 - **旧媒体库需要重新扫描一次**，已有条目的元数据才会补上。
+- 如果 STRM 里是 AList 的 `/d/...` 链接，Worker 会直接 302 给客户端，让 AList 为客户端 IP 生成临时直链（不在 Worker 侧提前解析成 SharePoint 链接）。
 - 播放支持：
 
 ```text

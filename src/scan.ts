@@ -221,6 +221,22 @@ async function scanDirectory(
   const posterPath = poster ? joinPath(dir, poster.name) : undefined;
   const fanartPath = fanart ? joinPath(dir, fanart.name) : undefined;
 
+  // 同一目录可能有多部片子：优先匹配 <片名>-poster.jpg / <片名>-fanart.jpg
+  const findAsset = (base: string, kind: "poster" | "fanart"): string | undefined => {
+    const lower = base.toLowerCase();
+    const candidates = [
+      `${lower}-${kind}`,
+      `${lower}.${kind}`,
+      `${lower}_${kind}`,
+    ];
+    for (const image of images) {
+      const name = image.name.toLowerCase();
+      const stem = name.replace(/\.(jpg|jpeg|png|webp)$/i, "");
+      if (candidates.includes(stem)) return joinPath(dir, image.name);
+    }
+    return undefined;
+  };
+
   // 只有第一次处理该目录时才把子目录入队；后续 skip 分页不再重复入队
   if (skip === 0) {
     for (const entry of entries) {
@@ -279,8 +295,10 @@ async function scanDirectory(
 
     const base = entry.name.replace(/\.strm$/i, "").toLowerCase();
     const meta = await readNfo(nfoMap.get(`${base}.nfo`) || nfoMap.get("movie.nfo"));
-    const metaPoster = resolveNfoPath(dir, meta.poster) || posterPath;
-    const metaFanart = resolveNfoPath(dir, meta.fanart) || fanartPath;
+    const itemPoster = findAsset(base, "poster") || posterPath;
+    const itemFanart = findAsset(base, "fanart") || fanartPath;
+    const metaPoster = resolveNfoPath(dir, meta.poster) || itemPoster;
+    const metaFanart = resolveNfoPath(dir, meta.fanart) || itemFanart;
 
     if (library.type === "movies") {
       await upsertItem(env, library.id, {
