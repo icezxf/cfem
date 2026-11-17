@@ -113,6 +113,22 @@ async function loadLibraries() {
       loadItems(true);
     };
   });
+
+  $("library-list").innerHTML = state.libraries.map((lib) => `
+    <div class="library-row">
+      <div class="meta">
+        <strong>${escapeHtml(lib.name)}</strong>
+        <span>${lib.type === "movies" ? "电影" : "剧集"} · ${escapeHtml(lib.path)}</span>
+      </div>
+      <button class="ghost" data-scan="${lib.id}">扫描</button>
+      <button class="ghost" data-delete="${lib.id}">删除</button>
+    </div>`).join("");
+  document.querySelectorAll("[data-scan]").forEach((el) => {
+    el.onclick = () => scanLibrary(Number(el.dataset.scan));
+  });
+  document.querySelectorAll("[data-delete]").forEach((el) => {
+    el.onclick = () => deleteLibrary(Number(el.dataset.delete));
+  });
   if (!state.libraryId && state.libraries.length) {
     state.libraryId = state.libraries[0].id;
     loadLibraries();
@@ -135,10 +151,20 @@ async function addLibrary() {
   await loadLibraries();
 }
 
-async function scanLibrary() {
-  if (!state.libraryId) return;
+async function deleteLibrary(id) {
+  const lib = state.libraries.find((item) => item.id === id);
+  if (!lib || !confirm(`删除媒体库【${lib.name}】及其条目？`)) return;
+  await api(`/api/libraries/${id}`, { method: "DELETE" });
+  if (state.libraryId === id) state.libraryId = 0;
+  await loadLibraries();
+  if (!state.libraryId) $("items").innerHTML = "";
+}
+
+async function scanLibrary(libraryId = state.libraryId) {
+  if (!libraryId) return;
+  state.libraryId = libraryId;
   $("scan-state").textContent = "正在启动扫描...";
-  const start = await (await api(`/api/libraries/${state.libraryId}/scan`, { method: "POST" })).json();
+  const start = await (await api(`/api/libraries/${libraryId}/scan`, { method: "POST" })).json();
   if (!start.id) {
     $("scan-state").textContent = start.error || "启动失败";
     return;

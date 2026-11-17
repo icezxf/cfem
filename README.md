@@ -41,6 +41,23 @@ Cloudflare Worker（src/index.ts）
 - Emby：`Sessions`、`Playing`、`Progress`、`Stopped`、`Logout`
 - Web 端：登录、添加媒体库、AList 目录选择、扫描进度、海报墙、详情、播放
 
+## 扫描与播放说明
+
+- 扫描会读取同目录的 `.nfo`（标题、简介、年份、类型、标签、时长）以及 `poster.jpg` / `fanart.jpg`。
+- 剧集会读取 `tvshow.nfo`、`season.nfo` 和单集 NFO。
+- **旧媒体库需要重新扫描一次**，已有条目的元数据才会补上。
+- 播放支持：
+
+```text
+/emby/Videos/{id}/stream
+/emby/Videos/{id}/original.mp4
+/emby/Videos/{id}/stream.mp4
+/emby/Videos/{id}/{source}/stream
+```
+
+- 解析直链时会转发客户端的 `User-Agent` 和 `Referer`；如果网盘直链绑定了请求方 IP 或需要登录 Cookie，302 仍可能失败，需要改用 AList 的分享直链或外部代理。
+- AList 地址/Token 在网页“设置”里配置；修改后直接重新扫描即可。
+
 ## 限制
 
 这是精简实现，不是完整 Emby：

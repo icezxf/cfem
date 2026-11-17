@@ -60,6 +60,65 @@ function seriesFromPath(path: string): { title: string; season: number } {
   return { title, season: parsed?.season ?? season };
 }
 
+interface NfoMeta {
+  title?: string;
+  plot?: string;
+  year?: string;
+  genres?: string;
+  tags?: string;
+  runtime?: number;
+  poster?: string;
+  fanart?: string;
+}
+
+function decodeXml(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .trim();
+}
+
+function parseNfo(xml: string): NfoMeta {
+  if (!xml) return {};
+  const one = (tag: string): string => {
+    const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
+    return match ? decodeXml(match[1].replace(/<[^>]+>/g, "")) : "";
+  };
+  const many = (tag: string): string[] => {
+    const out: string[] = [];
+    const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "gi");
+    for (const match of xml.matchAll(re)) {
+      const value = decodeXml(match[1].replace(/<[^>]+>/g, ""));
+      if (value) out.push(value);
+    }
+    return out;
+  };
+  const runtimeSeconds = Number(one("durationinseconds"));
+  const runtimeMinutes = Number(one("runtime") || one("duration"));
+  const premiere = one("premiered") || one("releasedate");
+  return {
+    title: one("title") || undefined,
+    plot: one("plot") || one("outline") || undefined,
+    year: one("year") || (premiere.length >= 4 ? premiere.slice(0, 4) : undefined),
+    genres: many("genre").join(" / ") || undefined,
+    tags: many("tag").join(" / ") || undefined,
+    runtime: Number.isFinite(runtimeSeconds) && runtimeSeconds > 0
+      ? Math.floor(runtimeSeconds)
+      : (Number.isFinite(runtimeMinutes) && runtimeMinutes > 0 ? Math.floor(runtimeMinutes * 60) : undefined),
+    poster: one("poster") || undefined,
+    fanart: one("fanart") || undefined,
+  };
+}
+
+function resolveNfoPath(dir: string, value?: string): string | undefined {
+  if (!value) return undefined;
+  if (/^https?:\/\//i.test(value) || value.startsWith("/")) return value;
+  return joinPath(dir, value);
+}
+
 async function upsertItem(
   env: Env,
   libraryId: number,
@@ -70,6 +129,10 @@ async function upsertItem(
     strmUrl?: string;
     poster?: string;
     fanart?: string;
+    plot?: string;
+    year?: string;
+    genres?: string;
+    tags?: string;
     runtime?: number;
     size?: number;
     mtime?: number;
@@ -82,15 +145,19 @@ async function upsertItem(
   const now = nowSec();
   await env.DB.prepare(
     `INSERT INTO items
-      (library_id, title, type, strm_path, strm_url, poster, fanart, runtime, size, mtime,
-       series_id, season_number, episode_number, parent_id, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+      (library_id, title, type, strm_path, strm_url, poster, fanart, plot, year, genres, tags,
+       runtime, size, mtime, series_id, season_number, episode_number, parent_id, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
      ON CONFLICT(library_id, strm_path) DO UPDATE SET
        title = excluded.title,
        type = excluded.type,
        strm_url = COALESCE(excluded.strm_url, items.strm_url),
        poster = COALESCE(NULLIF(excluded.poster, ''), items.poster),
        fanart = COALESCE(NULLIF(excluded.fanart, ''), items.fanart),
+       plot = COALESCE(NULLIF(excluded.plot, ''), items.plot),
+       year = COALESCE(NULLIF(excluded.year, ''), items.year),
+       genres = COALESCE(NULLIF(excluded.genres, ''), items.genres),
+       tags = COALESCE(NULLIF(excluded.tags, ''), items.tags),
        runtime = CASE WHEN excluded.runtime > 0 THEN excluded.runtime ELSE items.runtime END,
        size = CASE WHEN excluded.size > 0 THEN excluded.size ELSE items.size END,
        mtime = excluded.mtime,
@@ -107,6 +174,10 @@ async function upsertItem(
     values.strmUrl ?? null,
     values.poster ?? null,
     values.fanart ?? null,
+    values.plot ?? null,
+    values.year ?? null,
+    values.genres ?? null,
+    values.tags ?? null,
     values.runtime ?? 0,
     values.size ?? 0,
     values.mtime ?? 0,
@@ -131,6 +202,12 @@ async function scanDirectory(
   queue: QueueItem[],
 ): Promise<number> {
   const { entries } = await alist.list(dir, 1, 1000);
+  const nfoMap = new Map<string, string>();
+  for (const entry of entries) {
+    if (!entry.is_dir && /\.nfo$/i.test(entry.name)) {
+      nfoMap.set(entry.name.toLowerCase(), joinPath(dir, entry.name));
+    }
+  }
   const images = entries.filter((e) => !e.is_dir && /\.(jpg|jpeg|png|webp)$/i.test(e.name));
   const poster = images.find((e) => /^poster\.(jpg|jpeg|png|webp)$/i.test(e.name))
     || images.find((e) => /-poster\./i.test(e.name));
@@ -144,8 +221,26 @@ async function scanDirectory(
   }
 
   const files = entries.filter((entry) => !entry.is_dir && /\.strm$/i.test(entry.name));
-  const batch = files.slice(skip, skip + 5);
+  const batch = files.slice(skip, skip + 4);
   let scanned = 0;
+
+  const readNfo = async (path: string | undefined): Promise<NfoMeta> => {
+    if (!path) return {};
+    try {
+      return parseNfo(await alist.readText(path));
+    } catch {
+      return {};
+    }
+  };
+
+  const tvShowDir = (() => {
+    const parts = dir.split("/").filter(Boolean);
+    const idx = parts.findIndex((part) => /^(?:Season|S)\s*\d+$/i.test(part));
+    return idx > 0 ? `/${parts.slice(0, idx).join("/")}` : dir;
+  })();
+  const seriesMeta = library.type === "tvshows" ? await readNfo(nfoMap.get("tvshow.nfo") || joinPath(tvShowDir, "tvshow.nfo")) : {};
+  const seasonMeta = library.type === "tvshows" ? await readNfo(nfoMap.get("season.nfo")) : {};
+
   for (const entry of batch) {
     const full = joinPath(dir, entry.name);
     let url: string | undefined;
@@ -156,14 +251,24 @@ async function scanDirectory(
       // 单个 strm 失败不应中断整个扫描
     }
 
+    const base = entry.name.replace(/\.strm$/i, "").toLowerCase();
+    const meta = await readNfo(nfoMap.get(`${base}.nfo`) || nfoMap.get("movie.nfo"));
+    const metaPoster = resolveNfoPath(dir, meta.poster) || posterPath;
+    const metaFanart = resolveNfoPath(dir, meta.fanart) || fanartPath;
+
     if (library.type === "movies") {
       await upsertItem(env, library.id, {
-        title: cleanTitle(entry.name),
+        title: meta.title || cleanTitle(entry.name),
         type: "Movie",
         strmPath: full,
         strmUrl: url,
-        poster: posterPath,
-        fanart: fanartPath,
+        poster: metaPoster,
+        fanart: metaFanart,
+        plot: meta.plot,
+        year: meta.year,
+        genres: meta.genres,
+        tags: meta.tags,
+        runtime: meta.runtime,
         size: entry.size,
         mtime: entry.modified && Number.isFinite(Date.parse(entry.modified))
           ? Math.floor(Date.parse(entry.modified) / 1000)
@@ -175,29 +280,42 @@ async function scanDirectory(
       const seasonNumber = parsed?.season ?? series.season;
       const episodeNumber = parsed?.episode ?? 0;
       const seriesId = await upsertItem(env, library.id, {
-        title: series.title,
+        title: seriesMeta.title || series.title,
         type: "Series",
         strmPath: `series:${series.title}`,
-        poster: posterPath,
-        fanart: fanartPath,
+        poster: resolveNfoPath(tvShowDir, seriesMeta.poster) || posterPath,
+        fanart: resolveNfoPath(tvShowDir, seriesMeta.fanart) || fanartPath,
+        plot: seriesMeta.plot,
+        year: seriesMeta.year,
+        genres: seriesMeta.genres,
+        tags: seriesMeta.tags,
       });
       const seasonId = await upsertItem(env, library.id, {
-        title: `Season ${seasonNumber}`,
+        title: seasonMeta.title || `Season ${seasonNumber}`,
         type: "Season",
         strmPath: `season:${series.title}:${seasonNumber}`,
         seriesId,
         parentId: seriesId,
         seasonNumber,
-        poster: posterPath,
-        fanart: fanartPath,
+        poster: resolveNfoPath(dir, seasonMeta.poster) || posterPath,
+        fanart: resolveNfoPath(dir, seasonMeta.fanart) || fanartPath,
+        plot: seasonMeta.plot,
+        year: seasonMeta.year,
+        genres: seasonMeta.genres,
+        tags: seasonMeta.tags,
       });
       await upsertItem(env, library.id, {
-        title: cleanTitle(entry.name),
+        title: meta.title || cleanTitle(entry.name),
         type: "Episode",
         strmPath: full,
         strmUrl: url,
-        poster: posterPath,
-        fanart: fanartPath,
+        poster: metaPoster,
+        fanart: metaFanart,
+        plot: meta.plot,
+        year: meta.year,
+        genres: meta.genres,
+        tags: meta.tags,
+        runtime: meta.runtime,
         size: entry.size,
         mtime: entry.modified && Number.isFinite(Date.parse(entry.modified))
           ? Math.floor(Date.parse(entry.modified) / 1000)

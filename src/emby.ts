@@ -332,11 +332,16 @@ export async function embyPlaybackInfo(env: Env, id: string, token: string): Pro
   });
 }
 
-async function resolvePlaybackUrl(url: string, userAgent: string): Promise<string | null> {
+async function resolvePlaybackUrl(url: string, userAgent: string, referer?: string | null): Promise<string | null> {
   if (!/^https?:\/\//i.test(url)) return url;
+  const headers: Record<string, string> = {
+    "User-Agent": userAgent,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,video/*;q=0.8,*/*;q=0.7",
+  };
+  if (referer) headers.Referer = referer;
   const response = await fetch(url, {
     redirect: "manual",
-    headers: { "User-Agent": userAgent },
+    headers,
   });
   if (response.status >= 300 && response.status < 400) {
     const location = response.headers.get("Location");
@@ -366,7 +371,11 @@ export async function embyStream(request: Request, env: Env, id: string): Promis
     }
   }
   if (!url) return new Response("no url", { status: 404 });
-  const target = await resolvePlaybackUrl(url, request.headers.get("User-Agent") || "Mozilla/5.0");
+  const target = await resolvePlaybackUrl(
+    url,
+    request.headers.get("User-Agent") || "Mozilla/5.0",
+    request.headers.get("Referer"),
+  );
   if (!target) return new Response("resolve failed", { status: 502 });
   return new Response(null, {
     status: 302,

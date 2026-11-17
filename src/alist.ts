@@ -30,6 +30,7 @@ export class Alist {
     return {
       Authorization: this.token,
       "Content-Type": "application/json",
+      "User-Agent": "cfem/0.1",
     };
   }
 
@@ -76,13 +77,13 @@ export class Alist {
 
   async readText(path: string): Promise<string> {
     const url = await this.rawUrl(path);
-    const response = await fetch(url, { headers: { Authorization: this.token } });
+    const response = await fetch(url, { headers: { Authorization: this.token, "User-Agent": "cfem/0.1" } });
     if (!response.ok) throw new Error(`读取 ${path} 失败: HTTP ${response.status}`);
     return response.text();
   }
 
   async readBinary(path: string): Promise<Response> {
     const url = await this.rawUrl(path);
-    return fetch(url, { headers: { Authorization: this.token } });
+    return fetch(url, { headers: { Authorization: this.token, "User-Agent": "cfem/0.1" } });
   }
 }

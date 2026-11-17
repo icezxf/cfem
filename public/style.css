@@ -46,3 +46,10 @@ header .ghost { margin-left: auto; }
 video { width: 100%; border-radius: 10px; background: #000; }
 .dir { padding: 8px 10px; border-bottom: 1px solid #1f242d; cursor: pointer; display: flex; gap: 8px; }
 .dir:hover { background: #171a21; }
+
+.library-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.library-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #171a21; border: 1px solid #2b303b; border-radius: 10px; }
+.library-row .meta { flex: 1; min-width: 0; }
+.library-row .meta strong { display: block; font-size: 14px; }
+.library-row .meta span { display: block; color: #6b7280; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-row button { padding: 6px 10px; font-size: 12px; }

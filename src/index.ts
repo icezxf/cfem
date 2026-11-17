@@ -127,8 +127,12 @@ async function handleEmby(request: Request, env: Env, segments: string[]): Promi
     return embyEpisodes(env, segments[1], new URL(request.url));
   }
 
-  if ((segments[0] === "Videos" || segments[0] === "videos") && segments[2] === "stream") {
-    return embyStream(request, env, segments[1]);
+  if ((segments[0] === "Videos" || segments[0] === "videos") && segments.length >= 3) {
+    const action = segments[2];
+    const direct = action === "stream" || action === "original.mp4" || action === "original.strm"
+      || action.startsWith("stream.") || action.startsWith("original.");
+    const withSource = segments.length >= 4 && (segments[3] === "stream" || segments[3].startsWith("stream."));
+    if (direct || withSource) return embyStream(request, env, segments[1]);
   }
 
   return json({ error: "not found" }, 404);
