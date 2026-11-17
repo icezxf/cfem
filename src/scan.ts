@@ -237,7 +237,7 @@ export async function stepScan(env: Env, jobId: number): Promise<ScanJob | null>
     .bind(job.library_id).first<LibraryRow>();
   if (!library) return job;
 
-  const alist = Alist.fromEnv(env);
+  const alist = await Alist.fromEnv(env);
   const queue = parseQueue(job.queue);
   let scanned = job.scanned;
   let processedDirs = 0;

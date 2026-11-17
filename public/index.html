@@ -24,6 +24,21 @@
     </header>
 
     <section class="panel">
+      <h2>设置</h2>
+      <div class="form-row">
+        <input id="alist-url" placeholder="AList 地址，如 https://alist.example.com">
+        <input id="alist-token" type="password" placeholder="AList Token">
+        <button id="save-settings">保存 AList</button>
+      </div>
+      <div id="settings-state" class="hint"></div>
+      <div class="form-row" style="margin-top:10px">
+        <input id="old-password" type="password" placeholder="当前密码">
+        <input id="new-password" type="password" placeholder="新密码（至少 4 位）">
+        <button id="change-password" class="ghost">修改密码</button>
+      </div>
+    </section>
+
+    <section class="panel">
       <h2>媒体库</h2>
       <div id="libraries" class="chips"></div>
       <div class="form-row">

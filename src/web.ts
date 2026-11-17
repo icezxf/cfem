@@ -1,5 +1,5 @@
 import { Alist } from "./alist";
-import { authenticate, createToken, userByToken } from "./db";
+import { authenticate, createToken, getSetting, setSetting, updatePassword, userByToken } from "./db";
 import { createScan, stepScan } from "./scan";
 import type { Env, ItemRow, LibraryRow, UserRow } from "./types";
 import { json, nowSec, tokenFromRequest } from "./util";
@@ -20,12 +20,35 @@ export async function webLogin(request: Request, env: Env): Promise<Response> {
   return json({ token, user: { id: user.id, username: user.username } });
 }
 
-export async function webConfig(env: Env): Promise<Response> {
-  return json({
-    alistConfigured: Boolean(env.ALIST_URL && env.ALIST_TOKEN),
-    alistUrl: env.ALIST_URL || "",
-    version: "0.1.0",
-  });
+export async function webConfig(request: Request, env: Env): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (!user) return json({ error: "forbidden" }, 403);
+  const url = (await getSetting(env, "alist_url")) || env.ALIST_URL || "";
+  const token = (await getSetting(env, "alist_token")) || env.ALIST_TOKEN || "";
+  return json({ alistConfigured: Boolean(url && token), alistUrl: url, version: "0.1.0" });
+}
+
+export async function webSaveSettings(request: Request, env: Env): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (!user) return json({ error: "forbidden" }, 403);
+  const body = (await request.json().catch(() => ({}))) as { alistUrl?: string; alistToken?: string };
+  const url = (body.alistUrl || "").trim().replace(/\/+$/, "");
+  const token = (body.alistToken || "").trim();
+  if (url && !/^https?:\/\//i.test(url)) return json({ error: "AList 地址必须以 http:// 或 https:// 开头" }, 400);
+  if (url) await setSetting(env, "alist_url", url);
+  if (token) await setSetting(env, "alist_token", token);
+  return webConfig(request, env);
+}
+
+export async function webChangePassword(request: Request, env: Env): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (!user) return json({ error: "forbidden" }, 403);
+  const body = (await request.json().catch(() => ({}))) as { oldPassword?: string; newPassword?: string };
+  if (!body.newPassword || body.newPassword.length < 4) return json({ error: "新密码至少 4 位" }, 400);
+  const verified = await authenticate(env, user.username, body.oldPassword || "");
+  if (!verified) return json({ error: "旧密码错误" }, 400);
+  await updatePassword(env, user.id, body.newPassword);
+  return json({ status: "ok" });
 }
 
 export async function webAlistList(request: Request, env: Env): Promise<Response> {
@@ -34,7 +57,7 @@ export async function webAlistList(request: Request, env: Env): Promise<Response
   const url = new URL(request.url);
   const path = url.searchParams.get("path") || "/";
   try {
-    const data = await Alist.fromEnv(env).list(path, 1, 1000);
+    const data = await (await Alist.fromEnv(env)).list(path, 1, 1000);
     return json({ path, entries: data.entries, total: data.total });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 502);

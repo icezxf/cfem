@@ -46,12 +46,56 @@ async function showApp() {
   hidden($("login"), true);
   hidden($("app"), false);
   try {
-    const config = await (await api("/api/config")).json();
-    $("alist-state").textContent = config.alistConfigured ? `AList: ${config.alistUrl}` : "AList 未配置";
+    await loadConfig();
     await loadLibraries();
   } catch (e) {
     console.error(e);
   }
+}
+
+async function loadConfig() {
+  const config = await (await api("/api/config")).json();
+  $("alist-state").textContent = config.alistConfigured ? `AList: ${config.alistUrl}` : "AList 未配置";
+  $("alist-url").value = config.alistUrl || "";
+  $("settings-state").textContent = config.alistConfigured
+    ? "AList 已配置；Token 不会回显，留空保存表示不修改。"
+    : "先填 AList 地址和 Token，保存后再添加媒体库。";
+}
+
+async function saveSettings() {
+  const response = await api("/api/settings", {
+    method: "POST",
+    body: JSON.stringify({
+      alistUrl: $("alist-url").value.trim(),
+      alistToken: $("alist-token").value.trim(),
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    $("settings-state").textContent = data.error || "保存失败";
+    return;
+  }
+  $("alist-token").value = "";
+  $("settings-state").textContent = "已保存";
+  await loadConfig();
+}
+
+async function changePassword() {
+  const response = await api("/api/user/password", {
+    method: "POST",
+    body: JSON.stringify({
+      oldPassword: $("old-password").value,
+      newPassword: $("new-password").value,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(data.error || "修改失败");
+    return;
+  }
+  $("old-password").value = "";
+  $("new-password").value = "";
+  alert("密码已修改");
 }
 
 async function loadLibraries() {
@@ -215,6 +259,8 @@ $("login-btn").onclick = () => login().catch((e) => { $("login-error").textConte
 $("logout").onclick = logout;
 $("add-lib").onclick = addLibrary;
 $("scan-btn").onclick = scanLibrary;
+$("save-settings").onclick = saveSettings;
+$("change-password").onclick = changePassword;
 $("browse-btn").onclick = () => browse("/");
 $("load-more").onclick = () => loadItems(false);
 $("modal-close").onclick = () => hidden($("modal"), true);

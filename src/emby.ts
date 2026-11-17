@@ -290,7 +290,7 @@ export async function embyImage(env: Env, id: string, type: string): Promise<Res
           });
         }
       } else {
-        const response = await Alist.fromEnv(env).readBinary(path);
+        const response = await (await Alist.fromEnv(env)).readBinary(path);
         if (response.ok) {
           return new Response(response.body, {
             headers: { "Content-Type": response.headers.get("Content-Type") || "image/jpeg", "Cache-Control": "public, max-age=3600" },
@@ -359,7 +359,7 @@ export async function embyStream(request: Request, env: Env, id: string): Promis
   let url = row.strm_url || "";
   if (!url && row.strm_path) {
     try {
-      const content = await Alist.fromEnv(env).readText(row.strm_path);
+      const content = await (await Alist.fromEnv(env)).readText(row.strm_path);
       url = content.split(/\r?\n/).map((s) => s.trim()).find((s) => /^https?:\/\//i.test(s)) || "";
     } catch {
       return new Response("strm read failed", { status: 404 });

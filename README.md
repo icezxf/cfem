@@ -89,19 +89,32 @@ database_id = "这里填 database_id"
 npx wrangler d1 execute cfem --remote --file=./schema.sql
 ```
 
-### 4. 配置 Secrets
+### 4. 初始管理员（可选）
+
+不设置任何 secret 时，首次登录是：
+
+```text
+用户名：admin
+密码：admin
+```
+
+登录后请在网页“设置”里改密码。
+
+也可以先设置初始密码：
 
 ```bash
 npx wrangler secret put ADMIN_PASSWORD
-npx wrangler secret put ALIST_URL
-npx wrangler secret put ALIST_TOKEN
 ```
 
-- `ADMIN_PASSWORD`：Web/Emby 管理员密码，首次启动时自动创建 `admin`。
-- `ALIST_URL`：例如 `https://alist.example.com`，不要带结尾斜杠。
-- `ALIST_TOKEN`：AList 后台生成的 Token。请求头会以 `Authorization: <token>` 发送。
+它只在数据库里还没有 admin 时用于创建账号；之后以网页里修改的密码为准。
 
-> AList Token 权限很大，只放在 Worker Secret 里，不要写进前端或仓库。
+**AList 不再用 secret 配置**。登录后到网页“设置”里填 AList 地址和 Token，管理员可随时修改；Token 存在 D1 的 `settings` 表里，不会回显到前端。
+
+> 如果从旧版本升级，需要再执行一次 `schema.sql`，创建 `settings` 表：
+>
+> ```bash
+> npx wrangler d1 execute cfem --remote --file=./schema.sql
+> ```
 
 ### 4.1 用 Cloudflare API Token 代替浏览器登录
 
@@ -129,9 +142,8 @@ export CLOUDFLARE_ACCOUNT_ID="你的 account id"
 npx wrangler whoami
 npx wrangler d1 create cfem
 npx wrangler d1 execute cfem --remote --file=./schema.sql
+# 可选：设置初始管理员密码
 npx wrangler secret put ADMIN_PASSWORD
-npx wrangler secret put ALIST_URL
-npx wrangler secret put ALIST_TOKEN
 npx wrangler deploy
 ```
 
@@ -159,13 +171,14 @@ https://cfem.<your-subdomain>.workers.dev
 ### 6. 首次配置
 
 1. 打开 Worker URL；
-2. 用 `admin` + `ADMIN_PASSWORD` 登录；
-3. 填媒体库名称、类型、AList 路径（可点“浏览”选择目录）；
-4. 点“添加”，再点“扫描”，等待进度完成；
-5. 到 Emby 客户端添加服务器：
+2. 用 `admin` / `admin` 登录（如果设了 `ADMIN_PASSWORD`，用那个密码）；
+3. 在“设置”里填 AList 地址和 Token，点“保存 AList”；
+4. 填媒体库名称、类型、AList 路径（可点“浏览”选择目录）；
+5. 点“添加”，再点“扫描”，等待进度完成；
+6. 到 Emby 客户端添加服务器：
    - 地址：`https://cfem.<your-subdomain>.workers.dev`
    - 用户名：`admin`
-   - 密码：`ADMIN_PASSWORD`
+   - 密码：你在网页“设置”里改过的密码（默认 `admin`）
 
 Emby 客户端会访问 `/emby/...`，Worker 同时兼容根路径 `/Users/...`、`/Items/...`。
 
@@ -176,13 +189,13 @@ npx wrangler d1 execute cfem --local --file=./schema.sql
 npm run dev
 ```
 
-`wrangler dev` 默认使用本地 D1；Secrets 可以在 `.dev.vars` 里配置（不要提交）：
+`wrangler dev` 默认使用本地 D1；`.dev.vars` 只用于可选的初始管理员密码（不要提交）：
 
 ```ini
 ADMIN_PASSWORD=admin
-ALIST_URL=https://alist.example.com
-ALIST_TOKEN=your-token
 ```
+
+AList 地址和 Token 直接在网页设置里填。
 
 ## API 概览
 
@@ -241,23 +254,17 @@ POST /emby/Sessions/Logout
 
 按顺序检查：
 
-1. Secret 是否存在：
-
-```bash
-npx wrangler secret list
-```
-
-确认有 `ADMIN_PASSWORD`。Secret 修改后立即生效，不需要重新 deploy。
-
-2. 如果第一次登录发生在设置 `ADMIN_PASSWORD` 之前，数据库里的 admin 可能还是默认密码 `admin`。新版本会在每次登录时把 admin 密码同步为 secret 的值；更新代码后重新 deploy 再登录即可。
-
-3. 不想重新 deploy，可以直接重置 admin（会重新创建）：
+1. 默认账号是 `admin` / `admin`（除非创建管理员时设了 `ADMIN_PASSWORD`）。
+2. 密码以网页“设置”里修改的为准；Secret 只在首次创建 admin 时使用，之后不会再覆盖。
+3. 忘记密码时直接重置 admin（会重新创建）：
 
 ```bash
 npx wrangler d1 execute cfem --remote --command "DELETE FROM users WHERE username = 'admin';"
 ```
 
-然后用 `admin` + `ADMIN_PASSWORD` 登录，会自动重建。
+然后：
+- 没设 `ADMIN_PASSWORD`：用 `admin` / `admin` 登录；
+- 设了 `ADMIN_PASSWORD`：用 `admin` / 该 secret 登录。
 
 4. 如果报的是 500 而不是“用户名密码错误”，检查是否执行过：
 
@@ -269,8 +276,9 @@ npx wrangler d1 execute cfem --remote --file=./schema.sql
 
 ## 安全
 
-- 首次部署后立即改 `ADMIN_PASSWORD`，不要用默认值。
-- AList Token 放在 Secret，不要提交 `.dev.vars`。
+- 首次登录后立即在网页“设置”里改密码，不要长期用 `admin/admin`。
+- AList Token 存在 D1 的 `settings` 表里，只有管理员 API 能读写；不要把 D1 导出或数据库文件公开。
+- `.dev.vars` 不要提交。
 - 这是个人媒体服务，不要公开分享 Worker 地址和 AList Token。
 - 生产环境建议加 Cloudflare Access 或自定义域名 + 防火墙规则。
 

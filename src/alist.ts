@@ -1,3 +1,4 @@
+import { getSetting } from "./db";
 import type { Env } from "./types";
 
 export interface AlistEntry {
@@ -16,11 +17,13 @@ interface AlistResponse<T> {
 export class Alist {
   constructor(private base: string, private token: string) {}
 
-  static fromEnv(env: Env): Alist {
-    if (!env.ALIST_URL || !env.ALIST_TOKEN) {
-      throw new Error("ALIST_URL / ALIST_TOKEN 未配置");
+  static async fromEnv(env: Env): Promise<Alist> {
+    const url = (await getSetting(env, "alist_url")) || env.ALIST_URL || "";
+    const token = (await getSetting(env, "alist_token")) || env.ALIST_TOKEN || "";
+    if (!url || !token) {
+      throw new Error("AList 地址或 Token 未配置，请先在网页设置里填写");
     }
-    return new Alist(env.ALIST_URL.replace(/\/+$/, ""), env.ALIST_TOKEN);
+    return new Alist(url.replace(/\/+$/, ""), token);
   }
 
   private headers(): HeadersInit {

@@ -29,6 +29,8 @@ import {
   webScan,
   webScanStatus,
   webScanStep,
+  webSaveSettings,
+  webChangePassword,
 } from "./web";
 
 function systemInfo(): Response {
@@ -136,7 +138,9 @@ async function handleWeb(request: Request, env: Env, segments: string[]): Promis
   const method = request.method;
   const path = `/${segments.join("/")}`;
   if (path === "/api/login" && method === "POST") return webLogin(request, env);
-  if (path === "/api/config") return webConfig(env);
+  if (path === "/api/config") return webConfig(request, env);
+  if (path === "/api/settings" && method === "POST") return webSaveSettings(request, env);
+  if (path === "/api/user/password" && method === "POST") return webChangePassword(request, env);
   if (path === "/api/alist/list") return webAlistList(request, env);
   if (path === "/api/libraries") return webLibraries(request, env);
   if (segments[0] === "api" && segments[1] === "libraries" && segments[2] && segments[3] === "scan" && method === "POST") {

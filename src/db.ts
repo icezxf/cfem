@@ -14,14 +14,7 @@ export async function ensureAdmin(env: Env): Promise<void> {
     return;
   }
 
-  // 以 ADMIN_PASSWORD secret 为准：改过 secret 后无需手动改库
-  if (env.ADMIN_PASSWORD) {
-    const hash = await sha256(env.ADMIN_PASSWORD);
-    if (admin.password_hash !== hash) {
-      await env.DB.prepare("UPDATE users SET password_hash = ?1, is_admin = 1 WHERE id = ?2")
-        .bind(hash, admin.id).run();
-    }
-  }
+  // 已有 admin 时不再用 secret 覆盖，密码以网页里修改的为准
 }
 
 export async function authenticate(env: Env, username: string, password: string): Promise<UserRow | null> {
@@ -110,4 +103,22 @@ export async function listSessions(env: Env, userId: number, isAdmin: boolean): 
 
 export async function removeUserSessions(env: Env, userId: number): Promise<void> {
   await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?1").bind(userId).run();
+}
+
+export async function getSetting(env: Env, key: string): Promise<string | null> {
+  const row = await env.DB.prepare("SELECT value FROM settings WHERE key = ?1")
+    .bind(key).first<{ value: string }>();
+  return row?.value ?? null;
+}
+
+export async function setSetting(env: Env, key: string, value: string): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO settings (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+  ).bind(key, value).run();
+}
+
+export async function updatePassword(env: Env, userId: number, newPassword: string): Promise<void> {
+  const hash = await sha256(newPassword);
+  await env.DB.prepare("UPDATE users SET password_hash = ?1 WHERE id = ?2")
+    .bind(hash, userId).run();
 }
