@@ -132,3 +132,30 @@ export async function webItems(request: Request, env: Env): Promise<Response> {
   ).bind(...params, limit, offset).all<ItemRow>();
   return json({ items: rows.results, total: total?.c ?? 0 });
 }
+
+export async function webDebug(request: Request, env: Env): Promise<Response> {
+  const user = await requireAdmin(request, env);
+  if (!user) return json({ error: "forbidden" }, 403);
+  const libraries = await env.DB.prepare(
+    "SELECT l.*, (SELECT COUNT(*) FROM items i WHERE i.library_id = l.id) AS item_count FROM libraries l ORDER BY l.id",
+  ).all();
+  const total = await env.DB.prepare("SELECT COUNT(*) AS c FROM items").first<{ c: number }>();
+  const jobs = await env.DB.prepare("SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 5").all();
+  let alist: Record<string, unknown> = { ok: false };
+  try {
+    const client = await Alist.fromEnv(env);
+    const data = await client.list("/", 1, 5);
+    alist = { ok: true, entries: data.entries.map((e) => ({ name: e.name, is_dir: e.is_dir })) };
+  } catch (e) {
+    alist = { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  const configuredUrl = (await getSetting(env, "alist_url")) || env.ALIST_URL || "";
+  const configuredToken = (await getSetting(env, "alist_token")) || env.ALIST_TOKEN || "";
+  return json({
+    alistConfigured: Boolean(configuredUrl && configuredToken),
+    alist,
+    items: total?.c ?? 0,
+    libraries: libraries.results,
+    jobs: jobs.results,
+  });
+}

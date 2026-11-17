@@ -353,15 +353,21 @@ async function resolvePlaybackUrl(url: string, userAgent: string, referer?: stri
   }
   const body = await response.text();
   const href = body.match(/href="([^"]+)"/i);
-  if (href) return href[1].replace(/&amp;/g, "&");
-  const trimmed = body.trim();
+  if (href) {
+    try {
+      return new URL(href[1].replace(/&amp;/g, "&"), url).toString();
+    } catch {
+      return null;
+    }
+  }
+  const trimmed = body.trim().replace(/&amp;/g, "&");
   return /^https?:\/\//i.test(trimmed) ? trimmed : null;
 }
 
 export async function embyStream(request: Request, env: Env, id: string): Promise<Response> {
   const row = await env.DB.prepare("SELECT * FROM items WHERE id = ?1").bind(Number(id)).first<ItemRow>();
   if (!row) return new Response("not found", { status: 404 });
-  let url = row.strm_url || "";
+  let url = (row.strm_url || "").replace(/&amp;/g, "&");
   if (!url && row.strm_path) {
     try {
       const content = await (await Alist.fromEnv(env)).readText(row.strm_path);

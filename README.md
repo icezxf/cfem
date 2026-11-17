@@ -41,6 +41,18 @@ Cloudflare Worker（src/index.ts）
 - Emby：`Sessions`、`Playing`、`Progress`、`Stopped`、`Logout`
 - Web 端：登录、添加媒体库、AList 目录选择、扫描进度、海报墙、详情、播放
 
+## 诊断
+
+登录后点“设置”里的 **诊断**，会显示：
+
+- AList 地址/Token 是否配置；
+- 实际访问 AList 根目录的结果或错误；
+- 当前 `items` 总数；
+- 每个媒体库的条目数；
+- 最近 5 个扫描任务的 `status` / `scanned` / `error`。
+
+如果扫描失败，先看 `jobs[0].error`；常见是 AList Token 错误、路径不存在、Worker 子请求/CPU 超限。
+
 ## 扫描与播放说明
 
 - 扫描会读取同目录的 `.nfo`（标题、简介、年份、类型、标签、时长）以及 `poster.jpg` / `fanart.jpg`。

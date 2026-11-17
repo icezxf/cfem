@@ -80,6 +80,12 @@ async function saveSettings() {
   await loadConfig();
 }
 
+async function showDebug() {
+  const response = await api("/api/debug");
+  const data = await response.json().catch(() => ({}));
+  $("debug-output").textContent = JSON.stringify(data, null, 2);
+}
+
 async function changePassword() {
   const response = await api("/api/user/password", {
     method: "POST",
@@ -287,6 +293,7 @@ $("add-lib").onclick = addLibrary;
 $("scan-btn").onclick = scanLibrary;
 $("save-settings").onclick = saveSettings;
 $("change-password").onclick = changePassword;
+$("debug-btn").onclick = showDebug;
 $("browse-btn").onclick = () => browse("/");
 $("load-more").onclick = () => loadItems(false);
 $("modal-close").onclick = () => hidden($("modal"), true);

@@ -31,6 +31,7 @@ import {
   webScanStep,
   webSaveSettings,
   webChangePassword,
+  webDebug,
 } from "./web";
 
 function systemInfo(): Response {
@@ -159,6 +160,7 @@ async function handleWeb(request: Request, env: Env, segments: string[]): Promis
   if (segments[0] === "api" && segments[1] === "scan" && segments[2]) {
     return webScanStatus(request, env, Number(segments[2]));
   }
+  if (path === "/api/debug") return webDebug(request, env);
   if (path === "/api/items") return webItems(request, env);
   return json({ error: "not found" }, 404);
 }

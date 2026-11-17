@@ -221,7 +221,7 @@ async function scanDirectory(
   }
 
   const files = entries.filter((entry) => !entry.is_dir && /\.strm$/i.test(entry.name));
-  const batch = files.slice(skip, skip + 4);
+  const batch = files.slice(skip, skip + 2);
   let scanned = 0;
 
   const readNfo = async (path: string | undefined): Promise<NfoMeta> => {
@@ -362,7 +362,7 @@ export async function stepScan(env: Env, jobId: number): Promise<ScanJob | null>
   let error = job.error;
 
   try {
-    // 每个目录最多读 5 个 strm；TV 一项会写 Series/Season/Episode，控制在 50 子请求内
+    // 每个目录最多读 2 个 strm；TV 一项会写 Series/Season/Episode，避免 CPU/子请求超限
     while (queue.length > 0 && processedDirs < 1) {
       const item = queue.shift()!;
       scanned += await scanDirectory(env, library, alist, item.path, item.skip, queue);
