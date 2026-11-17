@@ -9,7 +9,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "cfem"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "924d6503-6aae-4ddf-84ef-0d13ec1df093"
 
 [observability]
 enabled = true
