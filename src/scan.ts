@@ -241,6 +241,24 @@ async function scanDirectory(
   const seriesMeta = library.type === "tvshows" ? await readNfo(nfoMap.get("tvshow.nfo") || joinPath(tvShowDir, "tvshow.nfo")) : {};
   const seasonMeta = library.type === "tvshows" ? await readNfo(nfoMap.get("season.nfo")) : {};
 
+  // 剧集海报通常在剧集根目录，而不是 Season 目录
+  let seriesPosterPath = posterPath;
+  let seriesFanartPath = fanartPath;
+  if (library.type === "tvshows" && tvShowDir !== dir) {
+    try {
+      const { entries: rootEntries } = await alist.list(tvShowDir, 1, 1000);
+      const rootImages = rootEntries.filter((e) => !e.is_dir && /\.(jpg|jpeg|png|webp)$/i.test(e.name));
+      const rootPoster = rootImages.find((e) => /^poster\.(jpg|jpeg|png|webp)$/i.test(e.name))
+        || rootImages.find((e) => /-poster\./i.test(e.name));
+      const rootFanart = rootImages.find((e) => /^(fanart|backdrop)\.(jpg|jpeg|png|webp)$/i.test(e.name))
+        || rootImages.find((e) => /-fanart\./i.test(e.name));
+      if (rootPoster) seriesPosterPath = joinPath(tvShowDir, rootPoster.name);
+      if (rootFanart) seriesFanartPath = joinPath(tvShowDir, rootFanart.name);
+    } catch {
+      // 根目录读不到就继续用当前目录的图
+    }
+  }
+
   for (const entry of batch) {
     const full = joinPath(dir, entry.name);
     let url: string | undefined;
@@ -283,8 +301,8 @@ async function scanDirectory(
         title: seriesMeta.title || series.title,
         type: "Series",
         strmPath: `series:${series.title}`,
-        poster: resolveNfoPath(tvShowDir, seriesMeta.poster) || posterPath,
-        fanart: resolveNfoPath(tvShowDir, seriesMeta.fanart) || fanartPath,
+        poster: resolveNfoPath(tvShowDir, seriesMeta.poster) || seriesPosterPath,
+        fanart: resolveNfoPath(tvShowDir, seriesMeta.fanart) || seriesFanartPath,
         plot: seriesMeta.plot,
         year: seriesMeta.year,
         genres: seriesMeta.genres,

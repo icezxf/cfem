@@ -144,6 +144,17 @@ export async function webDebug(request: Request, env: Env): Promise<Response> {
   const sample = await env.DB.prepare(
     "SELECT id, title, type, strm_path, strm_url, poster, plot, year FROM items ORDER BY id LIMIT 5",
   ).all();
+  let posterCheck: Record<string, unknown> = {};
+  const withPoster = sample.results.find((item: any) => item.poster);
+  if (withPoster) {
+    try {
+      const client = await Alist.fromEnv(env);
+      const stat = await client.stat((withPoster as any).poster);
+      posterCheck = { ok: true, path: (withPoster as any).poster, size: stat.size };
+    } catch (e) {
+      posterCheck = { ok: false, path: (withPoster as any).poster, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
   let alist: Record<string, unknown> = { ok: false };
   try {
     const client = await Alist.fromEnv(env);
@@ -151,6 +162,25 @@ export async function webDebug(request: Request, env: Env): Promise<Response> {
     alist = { ok: true, entries: data.entries.map((e) => ({ name: e.name, is_dir: e.is_dir })) };
   } catch (e) {
     alist = { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  let streamCheck: Record<string, unknown> = {};
+  const withUrl = sample.results.find((item: any) => item.strm_url);
+  if (withUrl) {
+    try {
+      const response = await fetch((withUrl as any).strm_url, {
+        method: "HEAD",
+        redirect: "manual",
+        headers: { "User-Agent": "cfem/0.1" },
+      });
+      streamCheck = {
+        ok: response.status >= 200 && response.status < 400,
+        status: response.status,
+        location: response.headers.get("Location"),
+        contentType: response.headers.get("Content-Type"),
+      };
+    } catch (e) {
+      streamCheck = { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
   }
   const configuredUrl = (await getSetting(env, "alist_url")) || env.ALIST_URL || "";
   const configuredToken = (await getSetting(env, "alist_token")) || env.ALIST_TOKEN || "";
@@ -161,5 +191,7 @@ export async function webDebug(request: Request, env: Env): Promise<Response> {
     libraries: libraries.results,
     jobs: jobs.results,
     sampleItems: sample.results,
+    posterCheck,
+    streamCheck,
   });
 }

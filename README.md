@@ -49,7 +49,10 @@ Cloudflare Worker（src/index.ts）
 - 实际访问 AList 根目录的结果或错误；
 - 当前 `items` 总数；
 - 每个媒体库的条目数；
-- 最近 5 个扫描任务的 `status` / `scanned` / `error`。
+- 最近 5 个扫描任务的 `status` / `scanned` / `error`；
+- 前 5 个条目的 `poster` / `plot` / `strm_url`；
+- `posterCheck`：Worker 能否通过 AList 取到第一张海报；
+- `streamCheck`：第一个 STRM 里的 URL 从 Worker 访问时的状态码/跳转地址。
 
 如果扫描失败，先看 `jobs[0].error`；常见是 AList Token 错误、路径不存在、Worker 子请求/CPU 超限。
 

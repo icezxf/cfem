@@ -338,7 +338,7 @@ async function resolvePlaybackUrl(url: string, userAgent: string, referer?: stri
     "User-Agent": userAgent,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,video/*;q=0.8,*/*;q=0.7",
   };
-  if (referer) headers.Referer = referer;
+  headers.Referer = referer || url;
   const response = await fetch(url, {
     redirect: "manual",
     headers,
