@@ -2,13 +2,26 @@ import type { Env, SessionRow, UserRow } from "./types";
 import { nowSec, randomId, sha256 } from "./util";
 
 export async function ensureAdmin(env: Env): Promise<void> {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS c FROM users").first<{ c: number }>();
-  if ((row?.c ?? 0) > 0) return;
-  const password = env.ADMIN_PASSWORD || "admin";
-  const hash = await sha256(password);
-  await env.DB.prepare(
-    "INSERT INTO users (username, password_hash, is_admin) VALUES (?1, ?2, 1)",
-  ).bind("admin", hash).run();
+  const admin = await env.DB.prepare(
+    "SELECT id, password_hash FROM users WHERE username = 'admin'",
+  ).first<{ id: number; password_hash: string }>();
+
+  if (!admin) {
+    const hash = await sha256(env.ADMIN_PASSWORD || "admin");
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO users (username, password_hash, is_admin) VALUES (?1, ?2, 1)",
+    ).bind("admin", hash).run();
+    return;
+  }
+
+  // 以 ADMIN_PASSWORD secret 为准：改过 secret 后无需手动改库
+  if (env.ADMIN_PASSWORD) {
+    const hash = await sha256(env.ADMIN_PASSWORD);
+    if (admin.password_hash !== hash) {
+      await env.DB.prepare("UPDATE users SET password_hash = ?1, is_admin = 1 WHERE id = ?2")
+        .bind(hash, admin.id).run();
+    }
+  }
 }
 
 export async function authenticate(env: Env, username: string, password: string): Promise<UserRow | null> {

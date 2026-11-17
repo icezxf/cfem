@@ -237,6 +237,36 @@ POST /emby/Sessions/Logout
 - 图片走 Worker 会增加请求数；大库建议后续改为 R2 直出。
 - 超过 10ms CPU 会返回 1102；列表页已限制每页 60 条。
 
+## 登录提示用户名密码错误
+
+按顺序检查：
+
+1. Secret 是否存在：
+
+```bash
+npx wrangler secret list
+```
+
+确认有 `ADMIN_PASSWORD`。Secret 修改后立即生效，不需要重新 deploy。
+
+2. 如果第一次登录发生在设置 `ADMIN_PASSWORD` 之前，数据库里的 admin 可能还是默认密码 `admin`。新版本会在每次登录时把 admin 密码同步为 secret 的值；更新代码后重新 deploy 再登录即可。
+
+3. 不想重新 deploy，可以直接重置 admin（会重新创建）：
+
+```bash
+npx wrangler d1 execute cfem --remote --command "DELETE FROM users WHERE username = 'admin';"
+```
+
+然后用 `admin` + `ADMIN_PASSWORD` 登录，会自动重建。
+
+4. 如果报的是 500 而不是“用户名密码错误”，检查是否执行过：
+
+```bash
+npx wrangler d1 execute cfem --remote --file=./schema.sql
+```
+
+5. 确认你打开的是 Worker 的线上地址，而不是本地 `wrangler dev`；本地 D1 和线上 D1 是两套数据。
+
 ## 安全
 
 - 首次部署后立即改 `ADMIN_PASSWORD`，不要用默认值。
