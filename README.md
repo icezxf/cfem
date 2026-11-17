@@ -103,6 +103,47 @@ npx wrangler secret put ALIST_TOKEN
 
 > AList Token 权限很大，只放在 Worker Secret 里，不要写进前端或仓库。
 
+### 4.1 用 Cloudflare API Token 代替浏览器登录
+
+如果不想用 `wrangler login` 的 OAuth，可以在 CI/脚本里用 API Token：
+
+1. Cloudflare Dashboard → **My Profile → API Tokens → Create Token → Custom token**
+2. 权限建议：
+
+| 权限 | 用途 |
+|---|---|
+| Account → **Workers Scripts → Edit** | 部署 Worker、写 Secret |
+| Account → **D1 → Edit** | 创建 D1、执行 schema |
+| Account → **Account Settings → Read** | `wrangler whoami` / 读取账号（可选） |
+| Zone → **Workers Routes → Edit** | 绑定自定义域名/路由时 |
+| Zone → **Zone → Read** | 自定义域名/路由时 |
+| Account → **Workers R2 Storage → Edit** | 以后用 R2 时再加，当前不需要 |
+
+3. Account resources 选你的账号；Zone resources 选目标域名或 All zones。
+4. 设置环境变量并部署：
+
+```bash
+export CLOUDFLARE_API_TOKEN="你的 token"
+export CLOUDFLARE_ACCOUNT_ID="你的 account id"
+
+npx wrangler whoami
+npx wrangler d1 create cfem
+npx wrangler d1 execute cfem --remote --file=./schema.sql
+npx wrangler secret put ADMIN_PASSWORD
+npx wrangler secret put ALIST_URL
+npx wrangler secret put ALIST_TOKEN
+npx wrangler deploy
+```
+
+注意：
+
+- **第一次部署会创建新 Worker**。Cloudflare 要求产品级 **Workers Admin** 才能创建 Worker；只有 `Editor` 时可能报权限错误。可以先用 Dashboard 手动创建一个同名 Worker，或把 token 的 Workers 权限设为 Admin。
+- Worker 已存在后，日常 `wrangler deploy` 只需要 `Workers Scripts: Edit`。
+- `wrangler d1 create` / `d1 execute --remote` 需要 D1 Edit。
+- `wrangler secret put` 需要 Workers Scripts Edit。
+- Token 不要提交到仓库；本地放 `.dev.vars` 之外，CI 用 Secret 注入。
+- 不想用 token 时可以继续用 `npx wrangler login`，两者二选一。
+
 ### 5. 部署
 
 ```bash
