@@ -223,16 +223,20 @@ async function scanDirectory(
 
   // 同一目录可能有多部片子：优先匹配 <片名>-poster.jpg / <片名>-fanart.jpg
   const findAsset = (base: string, kind: "poster" | "fanart"): string | undefined => {
-    const lower = base.toLowerCase();
-    const candidates = [
-      `${lower}-${kind}`,
-      `${lower}.${kind}`,
-      `${lower}_${kind}`,
-    ];
-    for (const image of images) {
-      const name = image.name.toLowerCase();
-      const stem = name.replace(/\.(jpg|jpeg|png|webp)$/i, "");
-      if (candidates.includes(stem)) return joinPath(dir, image.name);
+    const titleBase = base.replace(/[.\s_-]*(?:19|20)\d{2}.*$/i, "").trim();
+    const bases = [base, titleBase].filter(Boolean);
+    for (const candidateBase of bases) {
+      const lower = candidateBase.toLowerCase();
+      const candidates = [
+        `${lower}-${kind}`,
+        `${lower}.${kind}`,
+        `${lower}_${kind}`,
+      ];
+      for (const image of images) {
+        const name = image.name.toLowerCase();
+        const stem = name.replace(/\.(jpg|jpeg|png|webp)$/i, "");
+        if (candidates.includes(stem)) return joinPath(dir, image.name);
+      }
     }
     return undefined;
   };
@@ -294,7 +298,11 @@ async function scanDirectory(
     }
 
     const base = entry.name.replace(/\.strm$/i, "").toLowerCase();
-    const meta = await readNfo(nfoMap.get(`${base}.nfo`) || nfoMap.get("movie.nfo"));
+    const titleBase = base.replace(/[.\s_-]*(?:19|20)\d{2}.*$/i, "").trim();
+    const nfoPath = nfoMap.get(`${base}.nfo`)
+      || (titleBase ? nfoMap.get(`${titleBase}.nfo`) : undefined)
+      || nfoMap.get("movie.nfo");
+    const meta = await readNfo(nfoPath);
     const itemPoster = findAsset(base, "poster") || posterPath;
     const itemFanart = findAsset(base, "fanart") || fanartPath;
     const metaPoster = resolveNfoPath(dir, meta.poster) || itemPoster;
