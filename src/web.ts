@@ -170,8 +170,14 @@ export async function webDebug(request: Request, env: Env): Promise<Response> {
   let alist: Record<string, unknown> = { ok: false };
   try {
     const client = await Alist.fromEnv(env);
-    const data = await client.list("/", 1, 5);
-    alist = { ok: true, entries: data.entries.map((e) => ({ name: e.name, is_dir: e.is_dir })) };
+    const firstLibrary = libraries.results[0] as { path?: string } | undefined;
+    const path = firstLibrary?.path || "/";
+    const data = await client.list(path, 1, 50);
+    alist = {
+      ok: true,
+      path,
+      entries: data.entries.map((e) => ({ name: e.name, is_dir: e.is_dir })),
+    };
   } catch (e) {
     alist = { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
