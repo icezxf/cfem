@@ -96,8 +96,14 @@ export async function webScan(request: Request, env: Env, libraryId: number): Pr
   const user = await requireAdmin(request, env);
   if (!user) return json({ error: "forbidden" }, 403);
   try {
+    const running = await env.DB.prepare(
+      "SELECT id, library_id FROM scan_jobs WHERE library_id = ?1 AND status = 'running' ORDER BY id DESC LIMIT 1",
+    ).bind(libraryId).first<{ id: number; library_id: number }>();
+    if (running) {
+      return json({ id: running.id, library_id: running.library_id, status: "running", resumed: true });
+    }
     const id = await createScan(env, libraryId);
-    return json({ id, status: "running" });
+    return json({ id, library_id: libraryId, status: "running" });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 400);
   }

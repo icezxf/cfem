@@ -119,7 +119,7 @@ async function handleEmby(request: Request, env: Env, segments: string[]): Promi
   }
   if (segments[0] === "Items" && segments.length === 3 && segments[2] === "PlaybackInfo") {
     const token = tokenFromRequest(request) || "";
-    return embyPlaybackInfo(env, segments[1], token);
+    return embyPlaybackInfo(env, segments[1], token, new URL(request.url).origin);
   }
   if (segments[0] === "Items" && segments.length === 2) return embyItemDetail(env, segments[1]);
 

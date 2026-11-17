@@ -37,6 +37,11 @@ function cleanTitle(name: string): string {
   return name.replace(/\.strm$/i, "").replace(/[._]+/g, " ").trim();
 }
 
+function yearFromName(name: string): string | undefined {
+  const match = name.match(/(19|20)\d{2}/);
+  return match ? match[0] : undefined;
+}
+
 function parseEpisode(name: string): { season: number; episode: number } | null {
   const match = name.match(/S(\d{1,2})[\s._-]*E(\d{1,3})/i) || name.match(/(\d{1,2})x(\d{1,3})/i);
   if (!match) return null;
@@ -216,8 +221,11 @@ async function scanDirectory(
   const posterPath = poster ? joinPath(dir, poster.name) : undefined;
   const fanartPath = fanart ? joinPath(dir, fanart.name) : undefined;
 
-  for (const entry of entries) {
-    if (entry.is_dir) queue.push({ path: joinPath(dir, entry.name), skip: 0 });
+  // 只有第一次处理该目录时才把子目录入队；后续 skip 分页不再重复入队
+  if (skip === 0) {
+    for (const entry of entries) {
+      if (entry.is_dir) queue.push({ path: joinPath(dir, entry.name), skip: 0 });
+    }
   }
 
   const files = entries.filter((entry) => !entry.is_dir && /\.strm$/i.test(entry.name));
@@ -283,7 +291,7 @@ async function scanDirectory(
         poster: metaPoster,
         fanart: metaFanart,
         plot: meta.plot,
-        year: meta.year,
+        year: meta.year || yearFromName(entry.name),
         genres: meta.genres,
         tags: meta.tags,
         runtime: meta.runtime,
@@ -330,7 +338,7 @@ async function scanDirectory(
         poster: metaPoster,
         fanart: metaFanart,
         plot: meta.plot,
-        year: meta.year,
+        year: meta.year || yearFromName(entry.name),
         genres: meta.genres,
         tags: meta.tags,
         runtime: meta.runtime,

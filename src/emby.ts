@@ -304,10 +304,10 @@ export async function embyImage(env: Env, id: string, type: string): Promise<Res
   return new Response(PNG, { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=3600" } });
 }
 
-export async function embyPlaybackInfo(env: Env, id: string, token: string): Promise<Response> {
+export async function embyPlaybackInfo(env: Env, id: string, token: string, origin: string): Promise<Response> {
   const row = await env.DB.prepare("SELECT * FROM items WHERE id = ?1").bind(Number(id)).first<ItemRow>();
   if (!row) return json({ error: "not found" }, 404);
-  const direct = `/emby/Videos/${row.id}/stream?api_key=${encodeURIComponent(token)}`;
+  const direct = new URL(`/emby/Videos/${row.id}/stream?api_key=${encodeURIComponent(token)}`, origin).toString();
   return json({
     MediaSources: [
       {
@@ -377,6 +377,21 @@ export async function embyStream(request: Request, env: Env, id: string): Promis
     }
   }
   if (!url) return new Response("no url", { status: 404 });
+
+  // AList /d/ 直链：交给客户端自己访问，让 AList 为客户端 IP 生成临时直链。
+  // 服务端先解析会把 Worker 出口 IP 的 tempauth 交给客户端，SharePoint 可能拒绝。
+  try {
+    const alist = await Alist.fromEnv(env);
+    if (alist.isDirectLink(url)) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: url, "Cache-Control": "no-store" },
+      });
+    }
+  } catch {
+    // AList 未配置时继续按普通 URL 解析
+  }
+
   const target = await resolvePlaybackUrl(
     url,
     request.headers.get("User-Agent") || "Mozilla/5.0",

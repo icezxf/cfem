@@ -34,6 +34,20 @@ export class Alist {
     };
   }
 
+  getBase(): string {
+    return this.base;
+  }
+
+  isDirectLink(url: string): boolean {
+    try {
+      const target = new URL(url);
+      const base = new URL(this.base);
+      return target.host === base.host && target.pathname.startsWith("/d/");
+    } catch {
+      return false;
+    }
+  }
+
   private absolute(raw: string): string {
     if (/^https?:\/\//i.test(raw)) return raw;
     return `${this.base}${raw.startsWith("/") ? "" : "/"}${raw}`;

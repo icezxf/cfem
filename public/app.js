@@ -48,6 +48,7 @@ async function showApp() {
   try {
     await loadConfig();
     await loadLibraries();
+    await resumeSavedScan();
   } catch (e) {
     console.error(e);
   }
@@ -166,8 +167,10 @@ async function deleteLibrary(id) {
   if (!state.libraryId) $("items").innerHTML = "";
 }
 
+let scanLooping = false;
+
 async function scanLibrary(libraryId = state.libraryId) {
-  if (!libraryId) return;
+  if (!libraryId || scanLooping) return;
   state.libraryId = libraryId;
   $("scan-state").textContent = "正在启动扫描...";
   const start = await (await api(`/api/libraries/${libraryId}/scan`, { method: "POST" })).json();
@@ -175,16 +178,46 @@ async function scanLibrary(libraryId = state.libraryId) {
     $("scan-state").textContent = start.error || "启动失败";
     return;
   }
-  for (;;) {
-    const job = await (await api(`/api/scan/${start.id}/step`, { method: "POST" })).json();
-    $("scan-state").textContent = `扫描中：已处理 ${job.scanned || 0} 个文件${job.status === "done" ? "（完成）" : ""}`;
-    if (job.status === "done" || job.status === "error") {
-      if (job.error) $("scan-state").textContent = `扫描失败：${job.error}`;
-      break;
+  localStorage.setItem("cfem_scan_job", String(start.id));
+  await pollScan(start.id);
+}
+
+async function pollScan(jobId) {
+  if (scanLooping) return;
+  scanLooping = true;
+  try {
+    for (;;) {
+      const job = await (await api(`/api/scan/${jobId}/step`, { method: "POST" })).json();
+      $("scan-state").textContent = `扫描中：已处理 ${job.scanned || 0} 个文件${job.status === "done" ? "（完成）" : ""}`;
+      if (job.status === "done" || job.status === "error") {
+        if (job.error) $("scan-state").textContent = `扫描失败：${job.error}`;
+        localStorage.removeItem("cfem_scan_job");
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400));
     }
-    await new Promise((resolve) => setTimeout(resolve, 600));
+  } finally {
+    scanLooping = false;
   }
   await loadItems(true);
+}
+
+async function resumeSavedScan() {
+  const id = localStorage.getItem("cfem_scan_job");
+  if (!id) return;
+  const response = await api(`/api/scan/${id}`);
+  if (!response.ok) {
+    localStorage.removeItem("cfem_scan_job");
+    return;
+  }
+  const job = await response.json();
+  if (job.status === "running") {
+    state.libraryId = job.library_id;
+    await loadLibraries();
+    await pollScan(Number(id));
+  } else {
+    localStorage.removeItem("cfem_scan_job");
+  }
 }
 
 async function loadItems(reset = true) {
