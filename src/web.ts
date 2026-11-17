@@ -141,6 +141,9 @@ export async function webDebug(request: Request, env: Env): Promise<Response> {
   ).all();
   const total = await env.DB.prepare("SELECT COUNT(*) AS c FROM items").first<{ c: number }>();
   const jobs = await env.DB.prepare("SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 5").all();
+  const sample = await env.DB.prepare(
+    "SELECT id, title, type, strm_path, strm_url, poster, plot, year FROM items ORDER BY id LIMIT 5",
+  ).all();
   let alist: Record<string, unknown> = { ok: false };
   try {
     const client = await Alist.fromEnv(env);
@@ -157,5 +160,6 @@ export async function webDebug(request: Request, env: Env): Promise<Response> {
     items: total?.c ?? 0,
     libraries: libraries.results,
     jobs: jobs.results,
+    sampleItems: sample.results,
   });
 }
